@@ -1,0 +1,484 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>مغامرة الجواهر</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@500;700&family=Lalezar&display=swap">
+<style>
+/* Layout: full-bleed 3D canvas, HUD on top, joystick lower-left, jump lower-right. Night-sky adventure look, single theme by design. */
+:root{
+  --bg:#0f1b2d;
+  --ink:#f6f0e1;
+  --gold:#ffc83d;
+  --lava:#ff5a3c;
+  --mint:#5fe3b1;
+  --panel:rgba(9,16,30,.72);
+  --line:rgba(246,240,225,.18);
+  --display:'Lalezar','Cairo',system-ui,sans-serif;
+  --body:'Cairo',system-ui,sans-serif;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{
+  background:var(--bg);color:var(--ink);font-family:var(--body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:10px;
+  overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;
+  -webkit-tap-highlight-color:transparent;
+}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block;background:var(--bg)}
+#app{position:relative;height:100%}
+.hud{position:absolute;top:0;left:0;right:0;display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;pointer-events:none}
+.chip{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:2px 12px;font-family:var(--display);font-size:20px;line-height:1.5;display:flex;gap:8px;align-items:baseline;font-variant-numeric:tabular-nums}
+.chip small{font-family:var(--body);font-size:12px;opacity:.7}
+.chip.gem b{color:var(--gold);font-weight:400}
+.chip.life b{color:var(--lava);font-weight:400;letter-spacing:2px}
+.chip.time b{color:var(--mint);font-weight:400}
+.chip.time.low b{color:var(--lava)}
+#zone{position:absolute;left:0;bottom:0;width:58%;height:46%}
+#base{position:absolute;width:112px;height:112px;border-radius:50%;border:2px solid var(--line);background:rgba(246,240,225,.06);pointer-events:none;transition:opacity .2s}
+#knob{position:absolute;left:30px;top:30px;width:52px;height:52px;border-radius:50%;background:rgba(246,240,225,.55);border:2px solid rgba(255,255,255,.7)}
+#jump{position:absolute;right:6px;bottom:30px;width:92px;height:92px;border-radius:50%;border:2px solid rgba(255,200,61,.8);background:rgba(255,200,61,.22);color:var(--ink);font-family:var(--display);font-size:24px;display:grid;place-items:center;cursor:pointer}
+#jump:active,#jump.on{background:rgba(255,200,61,.5)}
+.screen{position:absolute;inset:0;display:grid;place-items:center;background:rgba(8,14,26,.78);z-index:5}
+.screen[hidden]{display:none}
+.card{width:min(420px,100%);text-align:center;display:flex;flex-direction:column;gap:14px;align-items:center;padding:8px}
+.card h1{font-family:var(--display);font-weight:400;font-size:clamp(40px,12vw,64px);line-height:1.1;margin:0;color:var(--gold);text-wrap:balance}
+.card p{margin:0;font-size:16px;line-height:1.7;max-width:34ch;text-wrap:balance}
+.card .hint{font-size:14px;opacity:.75}
+.card .best{font-family:var(--display);font-size:20px;color:var(--mint)}
+.card button{font-family:var(--display);font-size:26px;color:#1a1305;background:var(--gold);border:0;border-radius:14px;padding:6px 34px;cursor:pointer}
+.card button:focus-visible,#jump:focus-visible{outline:3px solid var(--mint);outline-offset:3px}
+#toast{position:absolute;left:0;right:0;top:22%;text-align:center;pointer-events:none;opacity:0;transform:translateY(8px);transition:opacity .3s,transform .3s}
+#toast.show{opacity:1;transform:none}
+#toast b{display:block;font-family:var(--display);font-weight:400;font-size:clamp(38px,11vw,60px);color:var(--ink);text-shadow:0 3px 0 rgba(0,0,0,.35)}
+#toast span{display:inline-block;margin-top:2px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:2px 14px;font-size:15px}
+#flash{position:fixed;inset:0;background:var(--lava);opacity:0;pointer-events:none;transition:opacity .35s}
+#flash.on{opacity:.38;transition:none}
+@media (prefers-reduced-motion:reduce){#toast,#flash{transition:none}}
+</style>
+
+<canvas id="c"></canvas>
+<div id="flash"></div>
+<div id="app" dir="rtl" lang="ar">
+  <div class="hud">
+    <div class="chip"><small>المرحلة</small><b id="hLevel">1</b></div>
+    <div class="chip gem"><small>الجواهر</small><b id="hGems">0/4</b></div>
+    <div class="chip life"><b id="hLives">♥♥♥</b></div>
+    <div class="chip time" id="hTimeChip" hidden><small>الوقت</small><b id="hTime">0</b></div>
+  </div>
+  <div id="toast"><b id="tTitle"></b><span id="tSub"></span></div>
+  <div id="zone"><div id="base"><div id="knob"></div></div></div>
+  <button id="jump" type="button" aria-label="قفز">قفز</button>
+
+  <div id="screen" class="screen">
+    <div class="card">
+      <h1 id="sTitle">مغامرة الجواهر</h1>
+      <p id="sText">اجمع كل الجواهر ثم ادخل البوابة الخضراء. تجنّب الوحوش الحمراء واقفز فوق العوائق. كل مرحلة أصعب من التي قبلها.</p>
+      <p class="hint" id="sHint">العصا على اليسار للحركة، وزر قفز على اليمين.</p>
+      <div class="best" id="sBest"></div>
+      <button id="sBtn" type="button">ابدأ المغامرة</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+'use strict';
+var $=function(id){return document.getElementById(id)};
+var canvas=$('c');
+if(typeof THREE==='undefined'){ $('sText').textContent='تعذر تحميل محرك اللعبة. تحقق من الاتصال وأعد المحاولة.'; $('sBtn').hidden=true; return; }
+var renderer;
+try{ renderer=new THREE.WebGLRenderer({canvas:canvas,antialias:true}); }
+catch(e){ $('sText').textContent='جهازك لا يدعم الرسوم ثلاثية الأبعاد في هذا المتصفح.'; $('sBtn').hidden=true; return; }
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+
+var H=18;
+var scene=new THREE.Scene();
+scene.background=new THREE.Color(0x16294a);
+scene.fog=new THREE.Fog(0x16294a,28,70);
+var camera=new THREE.PerspectiveCamera(58,1,0.1,150);
+scene.add(new THREE.HemisphereLight(0xd6ecff,0x2a3b2f,0.95));
+var sun=new THREE.DirectionalLight(0xfff2d0,0.85); sun.position.set(8,20,6); scene.add(sun);
+
+/* ---------- shared geometry / materials ---------- */
+function mat(c,o){ o=o||{}; o.color=c; return new THREE.MeshLambertMaterial(o); }
+var G={
+  gem:new THREE.OctahedronGeometry(0.5,0),
+  enemy:new THREE.IcosahedronGeometry(0.65,0),
+  eye:new THREE.SphereGeometry(0.15,8,8),
+  pupil:new THREE.SphereGeometry(0.07,6,6),
+  bar:new THREE.BoxGeometry(7,0.6,0.6),
+  post:new THREE.CylinderGeometry(0.5,0.6,0.9,12),
+  lava:new THREE.CircleGeometry(2,28),
+  ring:new THREE.TorusGeometry(1.3,0.18,10,32),
+  disc:new THREE.CircleGeometry(1.2,28),
+  beam:new THREE.CylinderGeometry(1.1,1.1,9,20,1,true)
+};
+var M={
+  gem:new THREE.MeshLambertMaterial({color:0xffc83d,emissive:0x8a5a00,flatShading:true}),
+  enemy:new THREE.MeshLambertMaterial({color:0xe63946,flatShading:true}),
+  eye:mat(0xffffff), pupil:mat(0x111111),
+  bar:mat(0xf4a261), post:mat(0x6d4c41),
+  lava:new THREE.MeshBasicMaterial({color:0xff4a1f}),
+  lavaRim:new THREE.MeshBasicMaterial({color:0xffb347}),
+  ringOff:mat(0x7a8599), ringOn:new THREE.MeshBasicMaterial({color:0x5fe3b1}),
+  discOff:new THREE.MeshBasicMaterial({color:0x3a4558,transparent:true,opacity:.7,side:THREE.DoubleSide}),
+  discOn:new THREE.MeshBasicMaterial({color:0x5fe3b1,transparent:true,opacity:.55,side:THREE.DoubleSide}),
+  beam:new THREE.MeshBasicMaterial({color:0x5fe3b1,transparent:true,opacity:.22,side:THREE.DoubleSide,depthWrite:false}),
+  shadow:new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:.35,depthWrite:false})
+};
+
+/* ---------- world ---------- */
+(function buildWorld(){
+  var c=document.createElement('canvas'); c.width=c.height=128;
+  var g=c.getContext('2d');
+  g.fillStyle='#2f6f55'; g.fillRect(0,0,128,128);
+  g.fillStyle='#39825f'; g.fillRect(0,0,64,64); g.fillRect(64,64,64,64);
+  var t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(9,9);
+  var floor=new THREE.Mesh(new THREE.PlaneGeometry(H*2,H*2),new THREE.MeshLambertMaterial({map:t}));
+  floor.rotation.x=-Math.PI/2; scene.add(floor);
+  var ground=new THREE.Mesh(new THREE.PlaneGeometry(400,400),mat(0x12233f));
+  ground.rotation.x=-Math.PI/2; ground.position.y=-0.6; scene.add(ground);
+  var rimM=mat(0xb08968), L=H*2+1.2;
+  [[0,-H-0.3,L,0.6],[0,H+0.3,L,0.6],[-H-0.3,0,0.6,L],[H+0.3,0,0.6,L]].forEach(function(r){
+    var m=new THREE.Mesh(new THREE.BoxGeometry(r[2],0.7,r[3]),rimM); m.position.set(r[0],0.25,r[1]); scene.add(m);
+  });
+  var trunk=new THREE.CylinderGeometry(0.25,0.35,1.6,8), crown=new THREE.ConeGeometry(1.4,3.2,8);
+  var tm=mat(0x6d4c41), cm=[mat(0x2a9d8f),mat(0x3d8f4f),mat(0x52a368)];
+  for(var i=0;i<34;i++){
+    var a=Math.random()*Math.PI*2, d=H+4+Math.random()*16;
+    var tr=new THREE.Group();
+    var tk=new THREE.Mesh(trunk,tm); tk.position.y=0.2; tr.add(tk);
+    var cr=new THREE.Mesh(crown,cm[i%3]); cr.position.y=2.6; tr.add(cr);
+    var s=0.8+Math.random()*0.9; tr.scale.set(s,s,s);
+    tr.position.set(Math.cos(a)*d,-0.6+0.8*s,Math.sin(a)*d); scene.add(tr);
+  }
+})();
+
+/* ---------- player ---------- */
+var player=new THREE.Group(); scene.add(player);
+var pBody=new THREE.Group(); player.add(pBody);
+(function(){
+  var b=new THREE.Mesh(new THREE.CylinderGeometry(0.36,0.44,0.8,12),mat(0x4cc9f0)); b.position.y=0.5; pBody.add(b);
+  var h=new THREE.Mesh(new THREE.SphereGeometry(0.34,14,12),mat(0xffd6a5)); h.position.y=1.15; pBody.add(h);
+  var cap=new THREE.Mesh(new THREE.SphereGeometry(0.37,14,8,0,Math.PI*2,0,Math.PI/2),mat(0xf77f00)); cap.position.y=1.2; pBody.add(cap);
+  var brim=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.05,0.3),mat(0xf77f00)); brim.position.set(0,1.2,0.34); pBody.add(brim);
+  var em=mat(0x111111), eg=new THREE.SphereGeometry(0.05,6,6);
+  [-0.12,0.12].forEach(function(x){ var e=new THREE.Mesh(eg,em); e.position.set(x,1.12,0.31); pBody.add(e); });
+  var bp=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.55,0.25),mat(0x9b5de5)); bp.position.set(0,0.55,-0.4); pBody.add(bp);
+})();
+var shadow=new THREE.Mesh(new THREE.CircleGeometry(0.55,16),M.shadow);
+shadow.rotation.x=-Math.PI/2; shadow.position.y=0.03; scene.add(shadow);
+
+/* ---------- state ---------- */
+var S={mode:'menu',level:1,lives:3,score:0,gemsLeft:0,gemsNeed:0,time:0,limited:false,
+       vy:0,onGround:true,inv:0,grace:0,jumpBuf:0,best:0,t:0};
+try{ S.best=parseInt(localStorage.getItem('gemQuestBest')||'0',10)||0; }catch(e){}
+var objs={gems:[],enemies:[],bars:[],lavas:[],portal:null,group:null};
+var SPAWN={x:0,z:14}, PORTAL={x:0,z:-14};
+
+function cfg(n){
+  var gems=Math.min(3+n,14);
+  return {
+    gems:gems,
+    enemies:Math.min(Math.floor(1+n*0.8),9),
+    eSpeed:Math.min(1.7+n*0.28,5.4),
+    bars:n>=3?Math.min(n-2,6):0,
+    barSpd:Math.min(0.9+n*0.12,2.4),
+    lava:n>=5?Math.min(n-4,6):0,
+    time:n>=4?Math.round(Math.max(30,80-n*3)+gems*3):0
+  };
+}
+
+function clearLevel(){
+  if(objs.group){ scene.remove(objs.group); }
+  objs.group=new THREE.Group(); scene.add(objs.group);
+  objs.gems=[]; objs.enemies=[]; objs.bars=[]; objs.lavas=[]; objs.portal=null;
+}
+
+function spot(list,r,lim){
+  var best=null;
+  for(var i=0;i<80;i++){
+    var x=(Math.random()*2-1)*lim, z=(Math.random()*2-1)*lim, ok=true;
+    for(var k=0;k<list.length;k++){
+      var o=list[k], dx=x-o.x, dz=z-o.z;
+      if(dx*dx+dz*dz<(o.r+r)*(o.r+r)){ ok=false; break; }
+    }
+    best={x:x,z:z};
+    if(ok) return best;
+  }
+  return best;
+}
+
+function startLevel(n){
+  S.level=n;
+  var c=cfg(n); clearLevel();
+  var occ=[{x:SPAWN.x,z:SPAWN.z,r:6},{x:PORTAL.x,z:PORTAL.z,r:4}];
+
+  for(var i=0;i<c.lava;i++){
+    var p=spot(occ,2.6,H-3.5); occ.push({x:p.x,z:p.z,r:2.2});
+    var l=new THREE.Group();
+    var rim=new THREE.Mesh(new THREE.CircleGeometry(2.25,28),M.lavaRim); rim.rotation.x=-Math.PI/2; rim.position.y=0.02; l.add(rim);
+    var d=new THREE.Mesh(G.lava,M.lava); d.rotation.x=-Math.PI/2; d.position.y=0.04; l.add(d);
+    l.position.set(p.x,0,p.z); objs.group.add(l); objs.lavas.push({x:p.x,z:p.z,r:2.0});
+  }
+  var barOcc=occ.slice();
+  for(var j=0;j<c.bars;j++){
+    var q=spot(barOcc,5,H-7); barOcc.push({x:q.x,z:q.z,r:2.5});
+    var bg=new THREE.Group();
+    var bar=new THREE.Mesh(G.bar,M.bar); bar.position.y=0.3; bg.add(bar);
+    var post=new THREE.Mesh(G.post,M.post); post.position.y=0.45; bg.add(post);
+    bg.position.set(q.x,0,q.z); objs.group.add(bg);
+    objs.bars.push({x:q.x,z:q.z,a:Math.random()*6.28,dir:(j%2?1:-1),mesh:bg});
+  }
+  var gemOcc=occ.slice(0,2).map(function(o){return {x:o.x,z:o.z,r:o.r-2}});
+  objs.lavas.forEach(function(l){ gemOcc.push({x:l.x,z:l.z,r:l.r+0.8}); });
+  for(var k=0;k<c.gems;k++){
+    var g=spot(gemOcc,2.5,H-2); gemOcc.push({x:g.x,z:g.z,r:1.2});
+    var gm=new THREE.Mesh(G.gem,M.gem); gm.position.set(g.x,0.9,g.z); objs.group.add(gm);
+    objs.gems.push({x:g.x,z:g.z,mesh:gm,ph:Math.random()*6.28});
+  }
+  var eOcc=[{x:SPAWN.x,z:SPAWN.z,r:9}];
+  for(var m=0;m<c.enemies;m++){
+    var e=spot(eOcc,1,H-2); eOcc.push({x:e.x,z:e.z,r:3});
+    var eg=new THREE.Group();
+    var body=new THREE.Mesh(G.enemy,M.enemy); eg.add(body);
+    [-0.22,0.22].forEach(function(x){
+      var ey=new THREE.Mesh(G.eye,M.eye); ey.position.set(x,0.15,0.5); eg.add(ey);
+      var pu=new THREE.Mesh(G.pupil,M.pupil); pu.position.set(x,0.15,0.62); eg.add(pu);
+    });
+    eg.position.set(e.x,0.65,e.z); objs.group.add(eg);
+    objs.enemies.push({x:e.x,z:e.z,mesh:eg,ph:Math.random()*6.28,wx:e.x,wz:e.z,wt:0});
+  }
+  var pg=new THREE.Group();
+  var ring=new THREE.Mesh(G.ring,M.ringOff); ring.rotation.x=-Math.PI/2; ring.position.y=0.2; pg.add(ring);
+  var disc=new THREE.Mesh(G.disc,M.discOff); disc.rotation.x=-Math.PI/2; disc.position.y=0.08; pg.add(disc);
+  var beam=new THREE.Mesh(G.beam,M.beam); beam.position.y=4.5; beam.visible=false; pg.add(beam);
+  pg.position.set(PORTAL.x,0,PORTAL.z); objs.group.add(pg);
+  objs.portal={ring:ring,disc:disc,beam:beam};
+
+  S.gemsNeed=c.gems; S.gemsLeft=c.gems;
+  S.limited=c.time>0; S.time=c.time;
+  respawn(); S.grace=1.8; S.inv=0;
+  var notes={3:'عوارض دوّارة! اقفز فوقها',4:'الوقت محدود!',5:'بحيرات الحِمم! اقفز فوقها',7:'الوحوش أسرع',10:'أنت بطل حقيقي'};
+  var sub=notes[n]||('اجمع '+c.gems+' جواهر');
+  if(n>1 && n%3===0 && S.lives<5){ S.lives++; sub+='  +♥'; }
+  toast('المرحلة '+n,sub,2000);
+}
+
+function respawn(){
+  player.position.set(SPAWN.x,0,SPAWN.z); S.vy=0; S.onGround=true;
+  objs.enemies.forEach(function(e){
+    var dx=e.x-SPAWN.x, dz=e.z-SPAWN.z, d=Math.hypot(dx,dz);
+    if(d<8){ var k=d>0.01?8/d:1; e.x=SPAWN.x+(d>0.01?dx*k:8); e.z=Math.max(-H+1,SPAWN.z+(d>0.01?dz*k:0)-3); }
+  });
+}
+
+/* ---------- input ---------- */
+var joy={x:0,z:0}, keys={}, joyId=null, cx=0, cy=0;
+var zone=$('zone'), base=$('base'), knob=$('knob'), jumpBtn=$('jump');
+function homeBase(){
+  var r=zone.getBoundingClientRect();
+  base.style.left='14px'; base.style.top=Math.max(0,r.height-150)+'px'; base.style.opacity='.7';
+  knob.style.transform='translate(0,0)';
+}
+function updJoy(e){
+  var dx=e.clientX-cx, dy=e.clientY-cy, len=Math.hypot(dx,dy), max=52;
+  if(len<4){ joy.x=0; joy.z=0; knob.style.transform='translate(0,0)'; return; }
+  var k=Math.min(1,len/max), ux=dx/len, uy=dy/len;
+  joy.x=ux*k; joy.z=uy*k;
+  knob.style.transform='translate('+(ux*k*max)+'px,'+(uy*k*max)+'px)';
+}
+zone.addEventListener('pointerdown',function(e){
+  if(joyId!==null) return; joyId=e.pointerId;
+  try{ zone.setPointerCapture(e.pointerId); }catch(x){}
+  var r=zone.getBoundingClientRect(); cx=e.clientX; cy=e.clientY;
+  base.style.left=(cx-r.left-56)+'px'; base.style.top=(cy-r.top-56)+'px'; base.style.opacity='1';
+  updJoy(e); e.preventDefault();
+});
+zone.addEventListener('pointermove',function(e){ if(e.pointerId===joyId) updJoy(e); });
+function endJoy(e){ if(e.pointerId!==joyId) return; joyId=null; joy.x=0; joy.z=0; homeBase(); }
+zone.addEventListener('pointerup',endJoy);
+zone.addEventListener('pointercancel',endJoy);
+jumpBtn.addEventListener('pointerdown',function(e){ e.preventDefault(); S.jumpBuf=0.15; jumpBtn.classList.add('on'); });
+jumpBtn.addEventListener('pointerup',function(){ jumpBtn.classList.remove('on'); });
+jumpBtn.addEventListener('pointercancel',function(){ jumpBtn.classList.remove('on'); });
+window.addEventListener('keydown',function(e){
+  keys[e.code]=true;
+  if(e.code==='Space'||e.code==='ArrowUp'||e.code==='KeyW'){ if(e.code==='Space') S.jumpBuf=0.15; }
+  if(e.code==='Space'||e.code.indexOf('Arrow')===0) e.preventDefault();
+});
+window.addEventListener('keyup',function(e){ keys[e.code]=false; });
+window.addEventListener('contextmenu',function(e){ e.preventDefault(); });
+
+/* ---------- audio ---------- */
+var ac=null;
+function beep(f,d,type,g,f2){
+  try{
+    if(!ac) return; var o=ac.createOscillator(), gn=ac.createGain(), t=ac.currentTime;
+    o.type=type||'sine'; o.frequency.setValueAtTime(f,t);
+    if(f2) o.frequency.exponentialRampToValueAtTime(f2,t+d);
+    gn.gain.setValueAtTime(g||0.07,t); gn.gain.exponentialRampToValueAtTime(0.001,t+d);
+    o.connect(gn); gn.connect(ac.destination); o.start(t); o.stop(t+d);
+  }catch(e){}
+}
+
+/* ---------- ui ---------- */
+var toastTimer=0;
+function toast(a,b,ms){
+  $('tTitle').textContent=a; $('tSub').textContent=b; $('toast').classList.add('show');
+  clearTimeout(toastTimer); toastTimer=setTimeout(function(){ $('toast').classList.remove('show'); },ms||1800);
+}
+function hud(){
+  $('hLevel').textContent=S.level;
+  $('hGems').textContent=(S.gemsNeed-S.gemsLeft)+'/'+S.gemsNeed;
+  var h=''; for(var i=0;i<S.lives;i++) h+='♥'; $('hLives').textContent=h||'—';
+  var tc=$('hTimeChip'); tc.hidden=!S.limited;
+  if(S.limited){ $('hTime').textContent=Math.max(0,Math.ceil(S.time)); tc.classList.toggle('low',S.time<10); }
+}
+function flash(){ var f=$('flash'); f.classList.add('on'); requestAnimationFrame(function(){ requestAnimationFrame(function(){ f.classList.remove('on'); }); }); }
+function showScreen(title,text,hint,btn){
+  $('sTitle').textContent=title; $('sText').textContent=text; $('sHint').textContent=hint;
+  $('sBest').textContent=S.best>0?('أفضل نتيجة: '+S.best):''; $('sBtn').textContent=btn; $('screen').hidden=false;
+}
+
+function newGame(){
+  if(!ac){ try{ ac=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} }
+  try{ if(ac&&ac.state==='suspended') ac.resume(); }catch(e){}
+  S.lives=3; S.score=0; S.level=1; S.mode='play'; $('screen').hidden=true;
+  startLevel(1); hud();
+}
+$('sBtn').addEventListener('click',newGame);
+
+function hurt(){
+  if(S.inv>0) return;
+  S.lives--; flash(); beep(220,0.35,'sawtooth',0.09,70);
+  if(S.lives<=0){ gameOver(); return; }
+  S.inv=2; respawn(); S.grace=1;
+}
+function gameOver(){
+  S.mode='over';
+  if(S.score>S.best){ S.best=S.score; try{ localStorage.setItem('gemQuestBest',String(S.best)); }catch(e){} }
+  showScreen('انتهت اللعبة','وصلت إلى المرحلة '+S.level+' ونقاطك '+S.score+'.','هل تستطيع الوصول أبعد؟','العب مرة أخرى');
+  hud();
+}
+
+/* ---------- loop ---------- */
+function resize(){
+  var w=window.innerWidth,h=window.innerHeight;
+  renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); homeBase();
+}
+window.addEventListener('resize',resize); resize();
+
+var last=performance.now();
+function step(now){
+  requestAnimationFrame(step);
+  var dt=Math.min((now-last)/1000,0.05); last=now; S.t+=dt;
+  if(S.mode==='play') update(dt); else idle(dt);
+  var asp=camera.aspect, m=Math.max(1,Math.min(2,0.9/asp));
+  var tx=player.position.x, tz=player.position.z;
+  var k=1-Math.exp(-6*dt);
+  camera.position.x+=(tx-camera.position.x)*k;
+  camera.position.y+=(12*m-camera.position.y)*k;
+  camera.position.z+=(tz+10.5*m-camera.position.z)*k;
+  camera.lookAt(camera.position.x,0.4,camera.position.z-10.5*m*0.92);
+  renderer.render(scene,camera);
+}
+
+function idle(dt){
+  objs.gems.forEach(function(g){ g.mesh.rotation.y+=dt*2; g.mesh.position.y=0.9+Math.sin(S.t*3+g.ph)*0.15; });
+  objs.enemies.forEach(function(e){ e.mesh.position.y=0.65+Math.abs(Math.sin(S.t*6+e.ph))*0.15; });
+  objs.bars.forEach(function(b){ b.a+=dt*1.2*b.dir; b.mesh.rotation.y=b.a; });
+}
+
+function update(dt){
+  var c=cfg(S.level);
+  var ix=joy.x+((keys.ArrowRight||keys.KeyD)?1:0)-((keys.ArrowLeft||keys.KeyA)?1:0);
+  var iz=joy.z+((keys.ArrowDown||keys.KeyS)?1:0)-((keys.ArrowUp||keys.KeyW)?1:0);
+  var il=Math.hypot(ix,iz); if(il>1){ ix/=il; iz/=il; il=1; }
+  var sp=6.2, p=player.position;
+  p.x=Math.max(-H+0.6,Math.min(H-0.6,p.x+ix*sp*dt));
+  p.z=Math.max(-H+0.6,Math.min(H-0.6,p.z+iz*sp*dt));
+  if(il>0.12){ pBody.rotation.y=Math.atan2(ix,iz); pBody.position.y=Math.abs(Math.sin(S.t*14))*0.07*il; }
+  else pBody.position.y=0;
+
+  S.jumpBuf-=dt;
+  if(S.jumpBuf>0 && S.onGround){ S.vy=11; S.onGround=false; S.jumpBuf=0; beep(380,0.15,'square',0.05,720); }
+  S.vy-=28*dt; p.y+=S.vy*dt;
+  if(p.y<=0){ p.y=0; S.vy=0; S.onGround=true; }
+  shadow.position.x=p.x; shadow.position.z=p.z;
+  var ss=Math.max(0.4,1-p.y*0.18); shadow.scale.set(ss,ss,ss);
+
+  if(S.inv>0){ S.inv-=dt; player.visible=Math.floor(S.t*16)%2===0; if(S.inv<=0) player.visible=true; }
+  if(S.grace>0) S.grace-=dt;
+
+  if(S.limited){
+    S.time-=dt;
+    if(S.time<=0){ S.time=20; toast('انتهى الوقت','خسرت قلبًا',1500); hurt(); if(S.mode!=='play') return; }
+  }
+
+  objs.gems.forEach(function(g){ g.mesh.rotation.y+=dt*2; g.mesh.position.y=0.9+Math.sin(S.t*3+g.ph)*0.15; });
+  for(var i=objs.gems.length-1;i>=0;i--){
+    var g=objs.gems[i];
+    if(Math.hypot(p.x-g.x,p.z-g.z)<1.15 && p.y<1.8){
+      objs.group.remove(g.mesh); objs.gems.splice(i,1); S.gemsLeft--; S.score+=10;
+      beep(880,0.12,'triangle',0.07,1320);
+      if(S.gemsLeft===0){ activatePortal(); toast('البوابة مفتوحة','ادخل البوابة الخضراء',1600); beep(520,0.4,'triangle',0.08,1040); }
+    }
+  }
+
+  var chase=14+S.level;
+  objs.enemies.forEach(function(e){
+    var dx=p.x-e.x, dz=p.z-e.z, d=Math.hypot(dx,dz), vx=0, vz=0, spd=c.eSpeed;
+    if(S.grace>0){ spd=0; }
+    else if(d<chase && d>0.01){ vx=dx/d; vz=dz/d; }
+    else {
+      e.wt-=dt;
+      if(e.wt<=0){ e.wx=(Math.random()*2-1)*(H-2); e.wz=(Math.random()*2-1)*(H-2); e.wt=2+Math.random()*2; }
+      var wx=e.wx-e.x, wz=e.wz-e.z, wd=Math.hypot(wx,wz);
+      if(wd>0.3){ vx=wx/wd; vz=wz/wd; spd*=0.55; }
+    }
+    e.x=Math.max(-H+0.7,Math.min(H-0.7,e.x+vx*spd*dt)); e.z=Math.max(-H+0.7,Math.min(H-0.7,e.z+vz*spd*dt));
+    e.mesh.position.set(e.x,0.65+Math.abs(Math.sin(S.t*6+e.ph))*0.15,e.z);
+    if(vx||vz) e.mesh.rotation.y=Math.atan2(vx,vz);
+    if(S.inv<=0 && S.grace<=0 && d<1.05 && p.y<1.25) hurt();
+  });
+  if(S.mode!=='play') return;
+
+  objs.bars.forEach(function(b){
+    b.a+=dt*c.barSpd*b.dir; b.mesh.rotation.y=b.a;
+    var dx=p.x-b.x, dz=p.z-b.z, ca=Math.cos(b.a), sa=Math.sin(b.a);
+    var lx=dx*ca-dz*sa, lz=dx*sa+dz*ca;
+    if(S.inv<=0 && S.grace<=0 && Math.abs(lx)<3.5+0.35 && Math.abs(lz)<0.3+0.35 && p.y<0.65) hurt();
+  });
+  if(S.mode!=='play') return;
+
+  for(var j=0;j<objs.lavas.length;j++){
+    var l=objs.lavas[j];
+    if(S.inv<=0 && S.grace<=0 && Math.hypot(p.x-l.x,p.z-l.z)<l.r-0.25 && p.y<0.25){ hurt(); break; }
+  }
+  if(S.mode!=='play') return;
+
+  var pt=objs.portal;
+  if(S.gemsLeft===0){
+    pt.ring.rotation.z+=dt*2; var pu=1+Math.sin(S.t*5)*0.06; pt.disc.scale.set(pu,pu,pu);
+    if(Math.hypot(p.x-PORTAL.x,p.z-PORTAL.z)<1.5){
+      var bonus=50*S.level+(S.limited?Math.floor(S.time)*2:0);
+      S.score+=bonus; beep(660,0.5,'triangle',0.09,1320);
+      startLevel(S.level+1);
+    }
+  }
+  hud();
+}
+function activatePortal(){
+  var pt=objs.portal; pt.ring.material=M.ringOn; pt.disc.material=M.discOn; pt.beam.visible=true;
+}
+
+showScreen('مغامرة الجواهر','اجمع كل الجواهر ثم ادخل البوابة الخضراء. تجنّب الوحوش الحمراء واقفز فوق العوائق. كل مرحلة أصعب من التي قبلها.','العصا على اليسار للحركة، وزر قفز على اليمين.','ابدأ المغامرة');
+clearLevel(); startLevel(1); S.mode='menu'; S.limited=false; hud();
+requestAnimationFrame(step);
+})();
+</script>
+
+</body></html>
